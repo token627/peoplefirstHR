@@ -1,36 +1,254 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# PeopleFirst HR — AI Hiring Automation
 
-## Getting Started
+A demo-ready job application platform built with **Next.js 15**, **TypeScript**, and **Tailwind CSS**. Candidates submit applications via a landing page; an **n8n** automation workflow handles spam filtering, Google Sheets storage, and AI-powered email delivery.
 
-First, run the development server:
+---
+
+## Features
+
+### Frontend
+- Modern SaaS landing page — Hero, Job Details, Application Form
+- Form built with **React Hook Form** + **Zod** validation
+- Honeypot field for bot detection
+- Loading / success / error UI states
+- Fully responsive and keyboard accessible
+
+### API Route (`/api/application`)
+- Re-validates all fields server-side
+- Sanitizes input (strips HTML/scripts)
+- Rate limiting — 3 submissions per IP per minute
+- Honeypot check — silently discards bots
+- Forwards clean payload to n8n webhook
+
+### n8n Workflow (external — you configure)
+- Receives form payload via webhook
+- AI spam detection (Gemini / OpenAI)
+- Saves valid applications to **Google Sheets** (Sheet 1)
+- Saves spam applications to **Google Sheets** (Sheet 2)
+- Generates personalized AI acknowledgment email → sends to candidate
+- Generates structured HR summary email → sends to admin inbox
+
+---
+
+## Tech Stack
+
+| Layer | Technology |
+|-------|-----------|
+| Frontend | Next.js 15, TypeScript, Tailwind CSS |
+| Form | React Hook Form, Zod |
+| Automation | n8n (self-hosted or cloud) |
+| AI | Gemini API / OpenAI (configured in n8n) |
+| Storage | Google Sheets (via n8n) |
+| Email | Gmail SMTP / Brevo / Mailtrap (via n8n) |
+| Hosting | Vercel |
+
+---
+
+## Project Structure
+
+```
+peoplefirst-hr/
+├── app/
+│   ├── api/
+│   │   └── application/
+│   │       └── route.ts        # POST handler — validates + forwards to n8n
+│   ├── globals.css
+│   ├── layout.tsx
+│   └── page.tsx                # Landing page
+├── components/
+│   ├── HeroSection.tsx         # Hero + stats
+│   ├── JobDetailsSection.tsx   # Job card (requirements, perks)
+│   └── ApplicationForm.tsx     # Form with validation + states
+├── lib/
+│   ├── validation.ts           # Zod schema + sanitizer
+│   └── googleSheets.ts         # Google Sheets helper (unused — handled by n8n)
+├── types/
+│   └── application.ts          # TypeScript interfaces
+├── .env.local.example
+└── README.md
+```
+
+---
+
+## Application Form Fields
+
+| Field | Type | Required |
+|-------|------|----------|
+| Full Name | text | Yes |
+| Email | email | Yes |
+| Role Applying For | select | Yes |
+| Years of Experience | number | Yes |
+| Why are you interested? | textarea | Yes (min 10 chars) |
+| Portfolio URL | url | No |
+| LinkedIn URL | url | No |
+
+---
+
+## Data Flow
+
+```
+Candidate fills form
+        ↓
+POST /api/application (Next.js)
+        ↓
+Validate → Sanitize → Rate limit → Honeypot check
+        ↓
+POST to N8N_WEBHOOK_URL
+        ↓
+n8n Workflow:
+  ├── Spam Detection (AI)
+  │     ├── SPAM  → Save to "Spam Applications" sheet → stop
+  │     └── VALID → Save to "Valid Applications" sheet
+  │                       ↓
+  │               Generate AI candidate email
+  │                       ↓
+  │               Send email to candidate
+  │                       ↓
+  │               Generate HR summary
+  │                       ↓
+  │               Send email to admin
+  └── Return { success: true }
+        ↓
+Form shows success message
+```
+
+---
+
+## Setup
+
+### 1. Install Dependencies
+
+```bash
+npm install
+```
+
+### 2. Configure Environment
+
+```bash
+cp .env.local.example .env.local
+```
+
+Edit `.env.local`:
+
+```env
+N8N_WEBHOOK_URL=https://your-n8n.app.n8n.cloud/webhook/job-application
+```
+
+### 3. Run Development Server
 
 ```bash
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Open [http://localhost:3000](http://localhost:3000)
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+---
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+## n8n Workflow Setup
 
-## Learn More
+### Webhook URL Types
 
-To learn more about Next.js, take a look at the following resources:
+| URL Pattern | When active |
+|-------------|-------------|
+| `/webhook-test/job-application` | Only when workflow open in editor + "Listen for test event" clicked |
+| `/webhook/job-application` | When workflow is **activated** (toggle ON) |
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+Use `/webhook-test/` during development, switch to `/webhook/` for demo/production.
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+### Workflow Nodes
 
-## Deploy on Vercel
+| # | Node | Purpose |
+|---|------|---------|
+| 1 | Webhook | Receive POST payload from Next.js |
+| 2 | Set | Normalize field names |
+| 3 | AI (Gemini/OpenAI) | Spam classification → returns `{ isSpam, reason }` |
+| 4 | IF | Branch on `isSpam` |
+| 5A | Google Sheets Append | Spam path — append to "Spam Applications" |
+| 5B | Google Sheets Append | Valid path — append to "Valid Applications" |
+| 6 | AI | Generate personalized candidate email |
+| 7 | AI | Generate structured HR summary |
+| 8 | Gmail/SMTP | Send acknowledgment to candidate |
+| 9 | Gmail/SMTP | Send summary to admin |
+| 10 | Respond to Webhook | Return `{ success: true }` |
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+### Google Sheets Structure
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+**Sheet 1 — Valid Applications**
+
+| Timestamp | Name | Email | Role | Experience | Interest Note | Portfolio | LinkedIn | AI Summary | Status |
+|-----------|------|-------|------|------------|---------------|-----------|----------|------------|--------|
+
+**Sheet 2 — Spam Applications**
+
+| Timestamp | Name | Email | Reason | Raw Payload |
+|-----------|------|-------|--------|-------------|
+
+### AI Spam Detection Prompt
+
+```text
+You are a spam detection system.
+
+Analyze this job application and return ONLY valid JSON:
+{
+  "isSpam": true/false,
+  "reason": "short reason"
+}
+
+Application:
+Name: {{ $json.fullName }}
+Email: {{ $json.email }}
+Message: {{ $json.interestNote }}
+```
+
+### AI Candidate Email Prompt
+
+```text
+You are an HR recruiter at PeopleFirst HR.
+
+Write a warm, professional, encouraging acknowledgment email.
+
+Candidate:
+Name: {{ $json.fullName }}
+Role: {{ $json.role }}
+Experience: {{ $json.experience }} years
+Reason for applying: {{ $json.interestNote }}
+
+Rules:
+- Keep under 200 words
+- Sound human, not robotic
+- Mention the candidate's experience
+- Mention the role name
+- Thank them genuinely
+```
+
+---
+
+## Environment Variables
+
+| Variable | Required | Description |
+|----------|----------|-------------|
+| `N8N_WEBHOOK_URL` | Yes | Full n8n webhook URL for the job-application workflow |
+
+---
+
+## Production Checklist
+
+1. **Security** — Add CAPTCHA, stronger rate limiting, API key auth on webhook
+2. **Infrastructure** — Switch n8n to production webhook URL (`/webhook/`), set up retry/queue
+3. **Compliance** — GDPR consent checkbox, data retention policy, resume upload support
+
+---
+
+## Scripts
+
+```bash
+npm run dev      # Start dev server (localhost:3000)
+npm run build    # Production build
+npm run start    # Start production server
+npm run lint     # ESLint
+```
+Workflow screenshot:
+![alt text](image.png)
+
+UI Screenshot
+![alt text](image-1.png)
