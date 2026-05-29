@@ -247,8 +247,41 @@ npm run build    # Production build
 npm run start    # Start production server
 npm run lint     # ESLint
 ```
+
+WorkFlow Details: 
+This workflow is designed to automate the process of receiving, analyzing, and responding to job applications efficiently.
+
+1. Job Application Webhook: The workflow starts with a POST request to a webhook URL. This request contains the job application data.
+
+2. Extract Application Data: The data from the webhook is parsed to extract key details like the applicant's name, email, role, experience, interest note, portfolio URL, and LinkedIn URL.
+
+3. Spam Detection (Gemini): The extracted data is sent to the Gemini model to analyze whether the application email is spam or valid based on various criteria.
+
+4. Parse Spam Result: The result from the spam detection step is checked. If marked as spam, the isSpam flag is set to true.
+
+5. Is Spam?: The workflow uses a conditional node to check the isSpam flag.
+
+5. i. If Spam: The information is saved to a specified Google Sheets document under "Sheet1" labeled as spam.
+
+5. ii. If Not Spam: Valid applications are saved to another sheet in the same document.
+
+6. Generate AI Candidate Email: For valid applications, an AI-generated acknowledgment email is composed for the applicant.
+
+7. Parse AI Email: The text for the email body is prepared and formatted properly before sending.
+
+8. Send Candidate Email: The prepared email is sent to the applicant using Gmail.
+
+9. Send Admin Email: An email notification is sent to an admin's email address, summarizing the received application details.
+
+10. Respond to Webhook: Finally, the workflow sends a JSON response back to confirm the successful receipt of the application.
+
 Workflow screenshot:
 ![alt text](image.png)
 
 UI Screenshot
 ![alt text](image-1.png)
+
+Output
+![alt text](image-4.png)
+![alt text](image-3.png)
+![alt text](image-2.png)
